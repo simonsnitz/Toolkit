@@ -11,12 +11,18 @@ def getUniprotData(acc):
         # pprint(data)
 
         annotationScore = data['annotationScore']
-        annotation = data['proteinDescription']['recommendedName']['fullName']['value']
+        try:
+            annotation = data['proteinDescription']['recommendedName']['fullName']['value']
+        except:
+            annotation = ""
         uniprotID = data['primaryAccession']
         organism = data['organism']['scientificName']
         lineage = data['organism']['lineage']
         seq = data['sequence']['value']
-        orf_name = data['genes'][0]['orfNames'][0]['value']
+        try:
+            orf_name = data['genes'][0]['orfNames'][0]['value']
+        except:
+            orf_name = ""
 
         refseq = ""
         embl = ""

@@ -3,6 +3,7 @@ from src.accID2operon import acc2operon, accID2sequence
 from src.fetch_metadata import getUniprotData
 import pandas as pd
 import re
+from pprint import pprint
 
 st.set_page_config(page_title="Ligify", layout='wide', initial_sidebar_state='auto')
 
@@ -147,28 +148,35 @@ if st.session_state.SUBMITTED:
 
         # create color-coded alias map
         colors = ["#ff9e9e", "#b9abff", "#8fffa3", "#ffc38f", "#8ffff4", "#fdff8f", "#c3ccfa", "#ffabf7"]
-            #colors = ["#red", "#purple", "#green", "#orange", "lightblue", "yellow", "blue", "pink"]
-        cmap = {}
-        c = 0
-        for i in operon["operon"]:
-            cmap[i["alias"]] = str(colors[c % len(colors)])
-            c += 1
+        #colors = ["#red", "#purple", "#green", "#orange", "lightblue", "yellow", "blue", "pink"]
 
         # Color and display the operon data table
-        def color_survived(val):
-            color = cmap[val]
-            return f'background-color: {color}'
-
 
         op = st.container()
         operon1, operon2 = op.columns(2)
 
         operon1.subheader("Operon table")
         df = pd.DataFrame(operon["operon"])
-        operon1.dataframe(df.style.applymap(color_survived, subset=["alias"]))
+        # pprint(df)
+
+
+        def bg_color_col(col):
+            color = [colors[i % len(colors)] for i,x in col.items()]
+            return ['background-color: %s' % color[i]
+                        if col.name=='alias' or i==operon['protein_index']   # color column `Total` or row `4`
+                        else ''
+                    for i,x in col.items()]
+
+        df = df.style.apply(bg_color_col)
+
+
+        operon1.dataframe(df)
 
         operon2.subheader("Predicted promoter")
-        operon2.write(operon["promoter"]['regulated_seq'])
+        try:
+            operon2.write(operon["promoter"]['regulated_seq'])
+        except:
+            pass
 
 
         # Create and display the color-annotated genome fragment
