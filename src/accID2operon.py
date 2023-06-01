@@ -42,7 +42,6 @@ def acc2MetaData(access_id: str):
 
 
 
-colors = ["red", "blue", "orange", "purple", "yellow", "pink", "brown", "purple", "light-blue", "grey"]
 
 
 
@@ -89,7 +88,7 @@ def NC2genome(genome_id, operon):
                     # if START of gene overlaps with END of prior gene...
                     if operon[index-1]["stop"] > operon[index]["start"]:
                         # truncated gene
-                        gene_seq = genome[operon[index-1]['stop']-startPos+1 : operon[index]['stop']-startPos]    
+                        gene_seq = genome[operon[index-1]['stop']-startPos+1 : operon[index]['stop']-startPos+1]    
                     else:
                         # full gene
                         gene_seq = genome[operon[index]["start"]-startPos : operon[index]["stop"]-startPos+1]
@@ -107,7 +106,7 @@ def NC2genome(genome_id, operon):
                     gene_seq = genome[operon[index-1]['stop']-startPos+1 : operon[index]['stop']-startPos+1]    
                 else:
                     # full gene
-                    gene_seq = genome[operon[index]["start"]-startPos : operon[index]["stop"]-startPos+1]                
+                    gene_seq = genome[operon[index]["start"]-startPos : ]                
 
 
             out["gene"+str(counter)] = gene_seq 
@@ -334,17 +333,36 @@ def acc2operon(accession):
         return "EMPTY"
 
 
+
+    # Input protein accession ID, output sequence in fasta format
+def accID2sequence(accID: str):
+    URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi/?db=protein&id="+accID+"&rettype=fasta"
+    response = requests.get(URL)
+    if response.ok:
+        fasta = response.text.split("\n")
+        fasta = [i for i in fasta if len(i) != 0]
+        fasta = "".join(i for i in fasta if i[0] != ">")
+
+        return fasta
+    else:
+        print("FATAL: Bad eFetch request "+ str(response.status_code))
+        return None
+
+
+
 if __name__ == "__main__":
     
     #pprint(acc2operon("WP_187140699.1"))
 
     #print(NC2genome("CP006763.1", 3531534, 3540271))
 
-    data = acc2operon("AAK24363")
+    #data = acc2operon("AAK24363")
 
     #print(data["operon_seq"])
 
     # print(NC2genome("CP006763.1", operon, colors))
+
+    accID2sequence("AGY77480")
 
 
 

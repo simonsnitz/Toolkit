@@ -1,5 +1,5 @@
 import streamlit as st
-from src.accID2operon import acc2operon
+from src.accID2operon import acc2operon, accID2sequence
 import pandas as pd
 import re
 
@@ -54,13 +54,42 @@ with st.form(key='toolkit'):
 
 if st.session_state.SUBMITTED:
 
+
+    top = st.container()
+    top1, top2 = top.columns(2)
+    # Fetch protein sequence
+    seq = accID2sequence(acc)
+    top1.subheader("Protein seqeunce")
+    top1.write(seq)
+
+
+    st.divider()
+
+
+    # Fetch operon data
     operon = acc2operon(acc)
+
+    # create color-coded alias map
+    colors = ["#ff9e9e", "#b9abff", "#8fffa3", "#ffc38f", "#8ffff4", "#fdff8f", "#c3ccfa", "#ffabf7"]
+        #colors = ["#red", "#purple", "#green", "#orange", "lightblue", "yellow", "blue", "pink"]
+    cmap = {}
+    c = 0
+    for i in operon["operon"]:
+        cmap[i["alias"]] = str(colors[c % len(colors)])
+        c += 1
+
+    # Color and display the operon data table
+    def color_survived(val):
+        color = cmap[val]
+        return f'background-color: {color}'
+
+    st.subheader("Operon")
     df = pd.DataFrame(operon["operon"])
-    st.write(df)
+    st.dataframe(df.style.applymap(color_survived, subset=["alias"]))
 
+
+    # Create and display the color-annotated genome fragment
     operon_seq = ""
-
-    colors = ["red", "blue", "orange", "purple", "yellow", "pink", "brown", "purple", "light-blue", "black", "red", "blue", "orange", "purple"]
 
     c = 0
     for seq in operon["operon_seq"]:
@@ -71,7 +100,7 @@ if st.session_state.SUBMITTED:
         elif re.compile(r"overlap").search(seq):
             html = "<span style='color: red;'>"+str(sequence)+"</span>"
         else:
-            html = f"<span style='color: {colors[c]};'>"+str(sequence)+"</span>"
+            html = f"<span style='background: {colors[c % len(colors)]};'>"+str(sequence)+"</span>"
             c += 1
         operon_seq += html
 
