@@ -1,6 +1,7 @@
 import streamlit as st
 from src.accID2operon import acc2operon
 import pandas as pd
+import re
 
 st.set_page_config(page_title="Ligify", layout='wide', initial_sidebar_state='auto')
 
@@ -56,4 +57,23 @@ if st.session_state.SUBMITTED:
     operon = acc2operon(acc)
     df = pd.DataFrame(operon["operon"])
     st.write(df)
-    st.write(operon["operon_seq"])
+
+    operon_seq = ""
+
+    colors = ["red", "blue", "orange", "purple", "yellow", "pink", "brown", "purple", "light-blue", "black", "red", "blue", "orange", "purple"]
+
+    c = 0
+    for seq in operon["operon_seq"]:
+        sequence = operon["operon_seq"][seq]
+
+        if re.compile(r"spacer").search(seq):
+            html = "<span style='color: grey;'>"+str(sequence)+"</span>"
+        elif re.compile(r"overlap").search(seq):
+            html = "<span style='color: red;'>"+str(sequence)+"</span>"
+        else:
+            html = f"<span style='color: {colors[c]};'>"+str(sequence)+"</span>"
+            c += 1
+        operon_seq += html
+
+        
+    st.markdown(operon_seq, unsafe_allow_html=True)

@@ -48,7 +48,7 @@ colors = ["red", "blue", "orange", "purple", "yellow", "pink", "brown", "purple"
 
 
 
-def NC2genome(genome_id, operon, colors):
+def NC2genome(genome_id, operon):
 
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore"
     startPos = operon[0]["start"]
@@ -61,7 +61,7 @@ def NC2genome(genome_id, operon, colors):
         genome = "".join(i for i in genome[0:-2] if i[0] != ">")
 
 
-        ### FUNCTION FOR BREAKING THE GENOME FRAGMENT INTO GENES AND SPACERS ###
+        ### GENOME FRAGMENT ANNOTATION FUNCTION ###
 
             ### This deals with one-sided gene overlaps (beginning or end)
 
@@ -133,7 +133,7 @@ def NC2genome(genome_id, operon, colors):
         else:
             print("does not match")
 
-        print(out)
+
         return out
 
 
@@ -317,7 +317,7 @@ def acc2operon(accession):
 
             operon, regIndex = getOperon(genes, index, reg['start'], reg['direction'])
             # operon_sequence = NC2genome(metaData["accver"], operon[0]["start"], operon[-1]["stop"])
-            operon_sequence = NC2genome(metaData["accver"], operon, colors)
+            operon_sequence = NC2genome(metaData["accver"], operon)
 
             data = {"operon": operon, "protein_index": regIndex, "operon_seq": operon_sequence }
 
