@@ -1,5 +1,6 @@
 import streamlit as st
 from src.accID2operon import acc2operon, accID2sequence
+from src.fetch_metadata import getUniprotData
 import pandas as pd
 import re
 
@@ -13,6 +14,15 @@ footer {visibility: hidden;}
 </style>
 '''
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+
+# Removes border around forms
+css = r'''
+    <style>
+        [data-testid="stForm"] {border: 0px}
+    </style>
+'''
+st.markdown(css, unsafe_allow_html=True)
 
 
 # Initialize state variables
@@ -34,7 +44,7 @@ head = st.container()
 head1, head2, head3 = head.columns(3)
 
 head2.markdown("<h1 style='text-align: center; color: black;'>Toolkit</h1>", unsafe_allow_html=True)
-head2.subheader('Collect information on a regulator')
+head2.markdown("<h3 style='text-align: center; color: black;'>Collect information on a regulator</h3>", unsafe_allow_html=True)
 
 acc = head2.text_input("RefSeq ID", "AGY77480")
 
@@ -56,12 +66,23 @@ if st.session_state.SUBMITTED:
 
 
     top = st.container()
-    top1, top2 = top.columns(2)
+    top1, top2, top3 = top.columns((2,1,1))
     # Fetch protein sequence
-    seq = accID2sequence(acc)
-    top1.subheader("Protein seqeunce")
-    top1.write(seq)
 
+    metadata = getUniprotData(acc)
+
+    #seq = accID2sequence(acc)
+    top1.subheader("Protein seqeunce")
+    top1.write(metadata['seq'])
+
+    taxonomy_names = ["Domain", "Phylum", "Class", "Order", "Family", "Genus"]
+    lineageDict = {}
+    for i in range(0, len(metadata['lineage'])):
+        lineageDict[taxonomy_names[i]] = metadata['lineage'][i]
+
+    lineageDF = pd.DataFrame(lineageDict, index=["Lineage",])
+    lineageDF = lineageDF.T
+    top2.dataframe(lineageDF)
 
     st.divider()
 
@@ -83,9 +104,16 @@ if st.session_state.SUBMITTED:
         color = cmap[val]
         return f'background-color: {color}'
 
-    st.subheader("Operon")
+
+    op = st.container()
+    operon1, operon2 = op.columns(2)
+
+    operon1.subheader("Operon table")
     df = pd.DataFrame(operon["operon"])
-    st.dataframe(df.style.applymap(color_survived, subset=["alias"]))
+    operon1.dataframe(df.style.applymap(color_survived, subset=["alias"]))
+
+    operon2.subheader("Predicted promoter")
+    operon2.write(operon["promoter"]['regulated_seq'])
 
 
     # Create and display the color-annotated genome fragment
@@ -105,4 +133,5 @@ if st.session_state.SUBMITTED:
         operon_seq += html
 
         
+    st.subheader("Operon sequence")
     st.markdown(operon_seq, unsafe_allow_html=True)
