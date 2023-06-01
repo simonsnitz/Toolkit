@@ -25,6 +25,24 @@ css = r'''
 st.markdown(css, unsafe_allow_html=True)
 
 
+# Removes the full-screen button for various elements
+style_fullscreen_button_css = """
+    button[title="View fullscreen"] {
+        display: none;
+    }
+    button[title="View fullscreen"]:hover {
+        display: none;
+        }
+    """
+st.markdown(
+    "<style>"
+    + style_fullscreen_button_css
+    + "</styles>",
+    unsafe_allow_html=True,
+)
+
+
+
 # Initialize state variables
 if "data" not in st.session_state:
         st.session_state.data = False
@@ -36,6 +54,7 @@ if 'SUBMITTED' not in st.session_state:
 def _connect_form_cb(connect_status):
     st.session_state.SUBMITTED = connect_status
     st.session_state.data = False
+
 
 
 
@@ -64,74 +83,110 @@ with st.form(key='toolkit'):
 
 if st.session_state.SUBMITTED:
 
+    with st.spinner("Collecting protein metadata"):
+    
 
-    top = st.container()
-    top1, top2, top3 = top.columns((2,1,1))
-    # Fetch protein sequence
+        top = st.container()
+        top1, top2, top3, top4 = top.columns((3,0.2, 2,1))
 
-    metadata = getUniprotData(acc)
+        # Get protein metadata
+        metadata = getUniprotData(acc)
 
-    #seq = accID2sequence(acc)
-    top1.subheader("Protein seqeunce")
-    top1.write(metadata['seq'])
-
-    taxonomy_names = ["Domain", "Phylum", "Class", "Order", "Family", "Genus"]
-    lineageDict = {}
-    for i in range(0, len(metadata['lineage'])):
-        lineageDict[taxonomy_names[i]] = metadata['lineage'][i]
-
-    lineageDF = pd.DataFrame(lineageDict, index=["Lineage",])
-    lineageDF = lineageDF.T
-    top2.dataframe(lineageDF)
-
-    st.divider()
+        # Display the protein sequence
+            #seq = accID2sequence(acc)
+        top1.subheader("Protein seqeunce")
+        top1.write(metadata['seq'])
 
 
-    # Fetch operon data
-    operon = acc2operon(acc)
-
-    # create color-coded alias map
-    colors = ["#ff9e9e", "#b9abff", "#8fffa3", "#ffc38f", "#8ffff4", "#fdff8f", "#c3ccfa", "#ffabf7"]
-        #colors = ["#red", "#purple", "#green", "#orange", "lightblue", "yellow", "blue", "pink"]
-    cmap = {}
-    c = 0
-    for i in operon["operon"]:
-        cmap[i["alias"]] = str(colors[c % len(colors)])
-        c += 1
-
-    # Color and display the operon data table
-    def color_survived(val):
-        color = cmap[val]
-        return f'background-color: {color}'
+        # Display associated publications
+        top1.subheader("References")
+        for ref in metadata["references"]:
+            top1.caption(ref["title"])
+            top1.markdown(f'- <a target="__blank">{"https://doi.org/"+ref["doi"]}</a>', unsafe_allow_html=True)
 
 
-    op = st.container()
-    operon1, operon2 = op.columns(2)
 
-    operon1.subheader("Operon table")
-    df = pd.DataFrame(operon["operon"])
-    operon1.dataframe(df.style.applymap(color_survived, subset=["alias"]))
+        # Create the metadata table
+        metadata_dict = {}
+        metadata_dict["Annotation"] = metadata["annotation"]
+        metadata_dict["Annotation score"] = metadata["annotationScore"]
+        metadata_dict["Uniprot ID"] = metadata["uniprotID"]
+        metadata_dict["RefSeq"] = metadata["refseq"]
+        metadata_dict["EMBL"] = metadata["EMBL"]
+        metadata_dict["ORF name"] = metadata["orf_name"]
+        metadata_dict["Organism"] = metadata["organism"]
 
-    operon2.subheader("Predicted promoter")
-    operon2.write(operon["promoter"]['regulated_seq'])
+        metadata_DF = pd.DataFrame(metadata_dict, index=["Protein metadata",])
+        metadata_DF = metadata_DF.T
+        top3.subheader("Protein metadata")
+        top3.dataframe(metadata_DF, use_container_width=True)
 
 
-    # Create and display the color-annotated genome fragment
-    operon_seq = ""
+        # Create the Phylogeny table
+        taxonomy_names = ["Domain", "Phylum", "Class", "Order", "Family", "Genus"]
+        lineage_dict = {}
+        for i in range(0, len(metadata['lineage'])):
+            lineage_dict[taxonomy_names[i]] = metadata['lineage'][i]
 
-    c = 0
-    for seq in operon["operon_seq"]:
-        sequence = operon["operon_seq"][seq]
+        lineage_DF = pd.DataFrame(lineage_dict, index=["Lineage",])
+        lineage_DF = lineage_DF.T
+        top4.subheader("Organism lineage")
+        top4.dataframe(lineage_DF, use_container_width=True)
 
-        if re.compile(r"spacer").search(seq):
-            html = "<span style='color: grey;'>"+str(sequence)+"</span>"
-        elif re.compile(r"overlap").search(seq):
-            html = "<span style='color: red;'>"+str(sequence)+"</span>"
-        else:
-            html = f"<span style='background: {colors[c % len(colors)]};'>"+str(sequence)+"</span>"
+
+
+
+        st.divider()
+
+
+    with st.spinner("Collecting genome context"):
+
+
+        # Fetch operon data
+        operon = acc2operon(acc)
+
+        # create color-coded alias map
+        colors = ["#ff9e9e", "#b9abff", "#8fffa3", "#ffc38f", "#8ffff4", "#fdff8f", "#c3ccfa", "#ffabf7"]
+            #colors = ["#red", "#purple", "#green", "#orange", "lightblue", "yellow", "blue", "pink"]
+        cmap = {}
+        c = 0
+        for i in operon["operon"]:
+            cmap[i["alias"]] = str(colors[c % len(colors)])
             c += 1
-        operon_seq += html
 
-        
-    st.subheader("Operon sequence")
-    st.markdown(operon_seq, unsafe_allow_html=True)
+        # Color and display the operon data table
+        def color_survived(val):
+            color = cmap[val]
+            return f'background-color: {color}'
+
+
+        op = st.container()
+        operon1, operon2 = op.columns(2)
+
+        operon1.subheader("Operon table")
+        df = pd.DataFrame(operon["operon"])
+        operon1.dataframe(df.style.applymap(color_survived, subset=["alias"]))
+
+        operon2.subheader("Predicted promoter")
+        operon2.write(operon["promoter"]['regulated_seq'])
+
+
+        # Create and display the color-annotated genome fragment
+        operon_seq = ""
+
+        c = 0
+        for seq in operon["operon_seq"]:
+            sequence = operon["operon_seq"][seq]
+
+            if re.compile(r"spacer").search(seq):
+                html = "<span style='color: grey;'>"+str(sequence)+"</span>"
+            elif re.compile(r"overlap").search(seq):
+                html = "<span style='color: red;'>"+str(sequence)+"</span>"
+            else:
+                html = f"<span style='background: {colors[c % len(colors)]};'>"+str(sequence)+"</span>"
+                c += 1
+            operon_seq += html
+
+            
+        st.subheader("Operon sequence")
+        st.markdown(operon_seq, unsafe_allow_html=True)
