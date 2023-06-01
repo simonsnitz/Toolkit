@@ -2,20 +2,20 @@ import requests
 import re
 from pprint import pprint
 import xmltodict
+import time
 
-
+#TODO:
+# Return a legit error message for the frontend if an error comes up
 
 headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.163 Safari/537.36'} 
 
 def acc2MetaData(access_id: str):
     
     result = requests.get(f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=protein&id={access_id}&rettype=ipg")
-
     if result.status_code != 200:
             print("non-200 HTTP response. eFetch failed")
 
     parsed = xmltodict.parse(result.text)
-
 
     protein = parsed["IPGReportSet"]["IPGReport"]["ProteinList"]["Protein"]
 
@@ -41,71 +41,149 @@ def acc2MetaData(access_id: str):
     return proteinDict
 
 
-    # try:
-    #     handle= Entrez.efetch(db='protein',id=access_id, rettype="ipg")
-    #     proteinList = Entrez.read(handle)['IPGReport']["ProteinList"][0]
-    #     protein = proteinList.get("CDSList", "MT")[0].attributes
-    
-    #     #sometimes the 'ProteinList' Key is not present.
-    #     #In that case, return a list with an empty dictionary
-    # #TODO
-    # # This bypasses "tricky" proteins. Try to fix this in the future
 
-    # except:
-    #     print('ProteinList KeyError avoided')
-    #     protein = "EMPTY"
-
-
-    # return protein
-    # #[protein['accver'],protein['start'],protein['stop'],protein['strand']]
+colors = ["red", "blue", "orange", "purple", "yellow", "pink", "brown", "purple", "light-blue", "grey"]
 
 
 
 
 
+def NC2genome(genome_id, operon, colors):
 
+    base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore"
+    startPos = operon[0]["start"]
+    stopPos = operon[-1]["stop"]
+    response = requests.get(base_url+"&id="+str(genome_id)+"&seq_start="+str(startPos)+"&seq_stop="+str(stopPos)+"&rettype=fasta")
 
-
-
-
-def NC2genome(NCacc):
-    response = requests.get('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id='+NCacc+'&rettype=fasta_cds_aa')
 
     if response.ok:
-        data = response.text
-        with open('temp/genome.txt', mode='w+') as f:
-        #with open('temp/genome.txt', mode='w+') as f:
-            f.write(data)
-    else:
-        print('bad request')
-    
-    with open('temp/genome.txt', mode='r+') as f:
-    #with open('temp/genome.txt', mode='r+') as f:
-        genome = f.readlines()
-    return genome
+        genome = response.text.split("\n")
+        genome = "".join(i for i in genome[0:-2] if i[0] != ">")
+
+
+        ### FUNCTION FOR BREAKING THE GENOME FRAGMENT INTO GENES AND SPACERS ###
+
+            ### This deals with one-sided gene overlaps (beginning or end)
+
+            ### It does NOT YET deal with double-sided overlaps (begining AND end)
+
+
+        out = {}
+        counter = 0
+        for index in range(0, len(operon)):
+
+            # reset overlap seq
+            overlap_seq = ""
+
+            # if you're not at the end...
+            if index != len(operon)-1:
+                # if END of gene overlaps with START of next gene...
+                if operon[index+1]["start"] < operon[index]["stop"]:
+                    # truncated gene
+                    gene_seq = genome[operon[index]["start"]-startPos : operon[index+1]["start"]-startPos]
+                    # overlap region
+                    overlap_seq = genome[operon[index+1]["start"]-startPos : operon[index]["stop"]-startPos+1]
+
+                # if you're not at the beginning...
+                elif index != 0:
+                    # if START of gene overlaps with END of prior gene...
+                    if operon[index-1]["stop"] > operon[index]["start"]:
+                        # truncated gene
+                        gene_seq = genome[operon[index-1]['stop']-startPos+1 : operon[index]['stop']-startPos]    
+                    else:
+                        # full gene
+                        gene_seq = genome[operon[index]["start"]-startPos : operon[index]["stop"]-startPos+1]
+
+                # if you're at the beginning
+                elif index == 0:     
+                    # full gene
+                    gene_seq = genome[operon[index]["start"]-startPos : operon[index]["stop"]-startPos+1]  
+
+            # if you ARE at the end...
+            elif index == len(operon)-1:
+                # see if START of gene overlaps with END of prior gene
+                if operon[index-1]["stop"] > operon[index]["start"]:
+                    # truncated gene
+                    gene_seq = genome[operon[index-1]['stop']-startPos+1 : operon[index]['stop']-startPos+1]    
+                else:
+                    # full gene
+                    gene_seq = genome[operon[index]["start"]-startPos : operon[index]["stop"]-startPos+1]                
+
+
+            out["gene"+str(counter)] = gene_seq 
+            if len(overlap_seq) > 0:
+                out["overlap"+str(counter)] = overlap_seq 
+
+            # Append the spacer
+            try:
+                spacer_seq = genome[operon[index]["stop"]-startPos+1 : operon[index+1]["start"]-startPos]
+            except:
+                spacer_seq = genome[operon[index]["stop"]-startPos+1 : len(genome)]
+            
+            
+            
+            if len(spacer_seq) != 0:
+                out["spacer"+str(counter)] = spacer_seq
+            
+            counter += 1
+        
+        reconstruct = "".join(i for i in out.values())
+        if reconstruct == genome:
+            print("matches")
+        else:
+            print("does not match")
+
+        print(out)
+        return out
 
 
 
 
 
-def parseGenome(genome, start, stop):
-    re1 = re.compile(start)
-    re2 = re.compile(stop)
+
+
+
+def getGenes(genome_id, startPos, stopPos):
+
+    # Fetch the genome fragment
+    base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore"
+    try:
+        response = requests.get(base_url+"&id="+str(genome_id)+"&seq_start="+str(startPos-10000)+"&seq_stop="+str(stopPos+10000)+"&rettype=fasta_cds_aa")
+        genome = response.text.split("\n")
+    except:
+        try:
+            response = requests.get(base_url+"&id="+str(genome_id)+"&seq_start="+str(startPos-5000)+"&seq_stop="+str(stopPos+5000)+"&rettype=fasta_cds_aa")
+            genome = response.text.split("\n")
+        except: 
+            try:
+                response = requests.get(base_url+"&id="+str(genome_id)+"&seq_start="+str(startPos)+"&seq_stop="+str(stopPos+5000)+"&rettype=fasta_cds_aa")
+                genome = response.text.split("\n")
+            except:
+                try:
+                    response = requests.get(base_url+"&id="+str(genome_id)+"&seq_start="+str(startPos-5000)+"&seq_stop="+str(stopPos)+"&rettype=fasta_cds_aa")
+                    genome = response.text.split("\n")
+                except:
+                    print("error fetching the genome fragment")
+
+
+    re1 = re.compile(str(startPos))
+    re2 = re.compile(str(stopPos))
     geneIndex = 0
     regIndex = None
-    allGenes = []
+    genes = []
     for i in genome:
-        if i[0] == '>':
-            if re1.search(i):
-                if re2.search(i):
-                    regIndex = geneIndex
-            geneIndex += 1
-            allGenes.append(i)
+        if len(i) != 0:
+            if i[0] == '>':
+                if re1.search(i):
+                    if re2.search(i):
+                        regIndex = geneIndex
+                geneIndex += 1
+                genes.append(i)
     if regIndex == None:
         print("regulator not found in genome")
         return None, None
     else:
-        return allGenes, regIndex
+        return genes, regIndex
 
 
 
@@ -221,47 +299,34 @@ def getOperon(allGenes, index, seq_start, strand):
     return geneArray, regulatorIndex
 
 
-def acc2genome(acc: str):
-    metaData = acc2MetaData(acc)
-    genome = NC2genome(metaData["accver"])
 
-    #print(genome)
-    # with open("temp.txt", "w+") as f:
-    #     f.write(genome)
-
-
-def getSequence(genome_id, startPos, stopPos):
-
-    URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id="+str(genome_id)+"&seq_start="+str(startPos)+"&seq_stop="+str(stopPos)+"&strand=1&rettype=fasta"
-    response = requests.get(URL)
-
-    if response.ok:
-        intergenic = response.text
-        output  = ""
-        for i in intergenic.split('\n')[1:]:
-            output += i
-            
-        return output
-    else:
-        # print('WARNING: Intergenic region is over 800bp')
-        return None
 
 
 
 def acc2operon(accession):
-    metaData = acc2MetaData(accession)
-    if metaData != "EMPTY":
-        genome = NC2genome(metaData["accver"])
-        allGenes, index = parseGenome(genome, metaData["start"], metaData["stop"])
-        if index != None:
-            reg = fasta2MetaData(allGenes[index])
-            operon, regIndex = getOperon(allGenes, index, reg['start'], reg['direction'])
-            operon_sequence = getSequence(metaData["accver"], min(operon[0]['start'], operon[0]["stop"])-500, max(operon[-1]["start"], operon[-1]["stop"]))
-            for gene in operon:
-                sequence = getSequence(metaData["accver"], gene["start"], gene["stop"])
-                gene["sequence"] = sequence
 
-            data = {"operon": operon, "enzyme_index": regIndex, "genome": metaData["accver"], "operon_seq": operon_sequence}
+
+    metaData = acc2MetaData(accession)
+
+
+    if metaData != "EMPTY":
+        genes, index = getGenes(metaData["accver"], int(metaData["start"]), int(metaData["stop"]))
+
+        if index != None:
+            reg = fasta2MetaData(genes[index])
+
+            operon, regIndex = getOperon(genes, index, reg['start'], reg['direction'])
+            # operon_sequence = NC2genome(metaData["accver"], operon[0]["start"], operon[-1]["stop"])
+            operon_sequence = NC2genome(metaData["accver"], operon, colors)
+
+            data = {"operon": operon, "protein_index": regIndex, "operon_seq": operon_sequence }
+
+            # For recording process speeds
+            # print("acc2MetaData time: "+str(acc2MetaData_end - acc2MetaData_start))
+            # print("getGenes time: "+str(getGenes_end - acc2MetaData_start))
+            # print("fasta2MetaData time: "+str(fasta2MetaData_end - getGenes_end))
+            # print("getOperon time: "+str(getOperon_end - fasta2MetaData_end))
+            
             return data
         else:
             return "EMPTY"
@@ -269,20 +334,17 @@ def acc2operon(accession):
         return "EMPTY"
 
 
-
 if __name__ == "__main__":
     
-    pprint(acc2operon("ADE62388.1"))
+    #pprint(acc2operon("WP_187140699.1"))
 
-    #acc2genome("WP_003080639.1")
+    #print(NC2genome("CP006763.1", 3531534, 3540271))
 
-    # seq = getSequence('NZ_CP060725.1', 4429403, 4429764)
-    # print(seq)
+    data = acc2operon("AAK24363")
 
-    # genome_id = 'NZ_CP060725.1'
-    # startPos = 4429403
-    # stopPos = 4429764
-    # URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id="+str(genome_id)+"&seq_start="+str(startPos)+"&seq_stop="+str(stopPos)+"&strand=1&rettype=fasta"
-    # response = requests.get(URL)
+    #print(data["operon_seq"])
 
-    # print(response.text)
+    # print(NC2genome("CP006763.1", operon, colors))
+
+
+
