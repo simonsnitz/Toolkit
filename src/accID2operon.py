@@ -128,12 +128,12 @@ def NC2genome(genome_id, operon):
         
         reconstruct = "".join(i for i in out.values())
         if reconstruct == genome:
-            print("matches")
+            genome_reassembly_match = True
         else:
-            print("does not match")
+            genome_reassembly_match = False
 
 
-        return out
+        return out, genome_reassembly_match
 
 
 
@@ -404,16 +404,16 @@ def acc2operon(accession):
             reg = fasta2MetaData(genes[index])
 
             operon, regIndex = getOperon(genes, index, reg['start'], reg['direction'])
-            operon_sequence = NC2genome(metaData["accver"], operon)
+            operon_sequence, reassembly_match = NC2genome(metaData["accver"], operon)
             promoter = predict_promoter(operon, regIndex, metaData["accver"])
 
-            data = {"operon": operon, "protein_index": regIndex, "operon_seq": operon_sequence, "promoter": promoter }
-
-            # For recording process speeds
-            # print("acc2MetaData time: "+str(acc2MetaData_end - acc2MetaData_start))
-            # print("getGenes time: "+str(getGenes_end - acc2MetaData_start))
-            # print("fasta2MetaData time: "+str(fasta2MetaData_end - getGenes_end))
-            # print("getOperon time: "+str(getOperon_end - fasta2MetaData_end))
+            data = {
+                "operon": operon, 
+                "protein_index": regIndex, 
+                "operon_seq": operon_sequence, 
+                "promoter": promoter,  
+                "reassembly_match": reassembly_match
+                }
             
             return data
         else:
